@@ -16,9 +16,11 @@ const WELCOME_TEXT =
     `אנו כאן כדי לעזור לכם לאתר בקלות את מיקום קברי יקיריכם, ולשמור על זכרם.\n\n` +
     `🔍 *איך מחפשים?*\n` +
     `פשוט שלחו לי את שמו של הנפטר (שם פרטי, שם משפחה או שניהם), ואחפש במאגר.\n\n` +
+    `➕ *להוספת נפטר חדש למאגר לחצו כאן:*\n` +
+    `https://ner-tamid.netlify.app/\n\n` +
     `💡 *טיפ:* שלחו את המילה 'שלום' בכל שלב כדי לחזור להודעה זו.`;
 
-// ✅ אימות Webhook מול פורטל מטא (GET)
+// ✅ אימות Webhook מול פורטל מטא
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -31,7 +33,7 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// קבלת הודעות מוואטסאפ (POST)
+// קבלת הודעות מוואטסאפ
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
     const body = req.body;
@@ -52,8 +54,19 @@ async function handleTextMessage(senderPhone, text) {
 }
 
 async function handleSearch(senderPhone, searchQuery) {
+    // 🛡️ חסימת שאילתות קצרות וספאם
+    if (!searchQuery || searchQuery.trim().length < 2) {
+        await sendWhatsApp(senderPhone, "לא הצלחתי להבין את השם לחיפוש. אנא שלחו שם פרטי או שם משפחה (לפחות 2 אותיות).");
+        return; 
+    }
+
     try {
-        const { data, error } = await supabase.from('deceased_records').select('*');
+        // 🔒 הפילטר החדש: מסנן רק רשומות שאושרו (is_approved === true)
+        const { data, error } = await supabase
+            .from('deceased_records')
+            .select('*')
+            .eq('is_approved', true);
+
         if (error) { console.error("❌ שגיאת Supabase:", error); return; }
 
         const matches = (data || []).filter(r => {
@@ -65,15 +78,20 @@ async function handleSearch(senderPhone, searchQuery) {
         if (matches.length > 0) {
             let msg = `🕯️ *מצאתי ${matches.length} תוצאות במערכת 'נר תמיד':*\n\n`;
             matches.slice(0, 3).forEach(d => {
+                
+                const sectionText = d.section ? (d.section.includes('חלקה') ? d.section : `חלקה ${d.section}`) : 'חלקה -';
+                const rowText = d.row ? (d.row.includes('שורה') ? d.row : `שורה ${d.row}`) : 'שורה -';
+                const graveText = d.grave_number ? (d.grave_number.includes('קבר') ? d.grave_number : `קבר ${d.grave_number}`) : 'קבר -';
+
                 msg += `👤 *${d.first_name || ''} ${d.last_name || ''}*\n` +
                        `📅 *תאריך פטירה:* ${d.hebrew_death_date || '-'}\n` +
                        `📍 *בית קברות:* ${d.cemetery_name || '-'}\n` +
-                       `🏛️ *מיקום:* חלקה ${d.section || '-'}, שורה ${d.row || '-'}, קבר ${d.grave_number || '-'}\n` +
+                       `🏛️ *מיקום:* ${sectionText}, ${rowText}, ${graveText}\n` +
                        `📝 *הערות:* ${d.notes || 'אין'}\n───────────────\n`;
             });
             await sendWhatsApp(senderPhone, msg);
         } else {
-            await sendWhatsApp(senderPhone, `לא מצאנו במאגר נפטר בשם "${searchQuery}".\n\n${WELCOME_TEXT}`);
+            await sendWhatsApp(senderPhone, `לא מצאנו במאגר נפטר בשם "${searchQuery}".\n\n➕ להוספת הנפטר למאגר לחצו כאן:\nhttps://ner-tamid.netlify.app/\n\n${WELCOME_TEXT}`);
         }
     } catch (err) {
         console.error("❌ תקלה:", err);
