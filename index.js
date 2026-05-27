@@ -1,3 +1,27 @@
+async function handleSearch(senderPhone, searchQuery) {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+        await sendWhatsApp(senderPhone, "לא הצלחתי להבין את השם לחיפוש.");
+        return; 
+    }
+
+    try {
+        // משיכה של הנתונים
+        const { data, error } = await supabase
+            .from('deceased_records')
+            .select('*')
+            .eq('is_approved', true);
+
+        if (error) { console.error("❌ שגיאת Supabase:", error); return; }
+
+        // 🔍 אבחון: הדפסת הנתונים שהתקבלו כדי לראות מה יש בפנים
+        console.log("📊 נתונים שהתקבלו מ-Supabase:", JSON.stringify(data, null, 2));
+
+        const matches = (data || []).filter(r => {
+            const fullName = `${r.first_name || ''} ${r.last_name || ''}`.toLowerCase();
+            return fullName.includes(searchQuery.toLowerCase());
+        });
+
+        // ... המשך הקוד כפי שהיה ...
 'use strict';
 
 require('dotenv').config();
