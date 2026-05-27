@@ -51,13 +51,20 @@ async function handleSearch(senderPhone, searchQuery) {
             return text.includes(searchQuery.toLowerCase());
         });
 
-        if (matches.length > 0) {
+if (matches.length > 0) {
             let msg = `🕯️ *נמצאו ${matches.length} תוצאות:*\n\n`;
             matches.slice(0, 3).forEach(d => {
                 msg += `👤 *${d.first_name} ${d.last_name}*\n` +
                        `📅 ${d.hebrew_death_date || '-'}\n` +
                        `📍 ${d.cemetery_name || '-'}\n` +
-                       `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n───────────────\n`;
+                       `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n`;
+                
+                // הוספת שורת ההערות במידה והמשתמש הזין כאלו בטופס
+                if (d.notes) {
+                    msg += `📝 הערות ניווט: ${d.notes}\n`;
+                }
+                
+                msg += `───────────────\n`;
             });
             await sendWhatsApp(senderPhone, msg);
 } else {
