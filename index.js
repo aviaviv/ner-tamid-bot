@@ -69,12 +69,19 @@ async function handleSearch(senderPhone, searchQuery) {
 
         if (error) { console.error("❌ שגיאת Supabase:", error); return; }
 
-        const matches = (data || []).filter(r => {
-            const fullName1 = ((r.first_name || '') + " " + (r.last_name || '')).trim();
-            const fullName2 = ((r.last_name || '') + " " + (r.first_name || '')).trim();
-            return fullName1.includes(searchQuery) || fullName2.includes(searchQuery);
+const matches = (data || []).filter(r => {
+            // מחברים את כל הטקסט של הרשומה למחרוזת אחת גדולה
+            const searchableText = [
+                r.first_name, 
+                r.last_name, 
+                r.grave_number, 
+                r.section, 
+                r.row, 
+                r.notes
+            ].join(' ').toLowerCase();
+            
+            return searchableText.includes(searchQuery.toLowerCase());
         });
-
         if (matches.length > 0) {
             let msg = `🕯️ *מצאתי ${matches.length} תוצאות במערכת 'נר תמיד':*\n\n`;
             matches.slice(0, 3).forEach(d => {
