@@ -61,7 +61,14 @@ async function handleSearch(senderPhone, searchQuery) {
             });
             await sendWhatsApp(senderPhone, msg);
 } else {
-            await sendWhatsApp(senderPhone, `לא נמצאו תוצאות עבור "${searchQuery}".\n\n➕ להוספת הנפטר למאגר לחצו כאן:\nhttps://ner-tamid.netlify.app/`);
+            await sendWhatsApp(senderPhone, 
+                `🕯️ *ברוכים הבאים למערכת 'נר תמיד'*\n\n` +
+                `לא מצאנו במאגר נפטר בשם "${searchQuery}".\n\n` +
+                `➕ *להוספת הנפטר למאגר לחצו כאן:*\n` +
+                `https://ner-tamid.netlify.app/\n\n` +
+                `🔍 *איך מחפשים?*\n` +
+                `פשוט שלחו לי את שמו של הנפטר (שם פרטי, שם משפחה או שניהם), ואחפש במאגר.`
+            );
         }
     } catch (err) {
         console.error("❌ תקלה:", err);
