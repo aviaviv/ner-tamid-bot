@@ -60,8 +60,8 @@ async function handleSearch(senderPhone, searchQuery) {
                        `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n───────────────\n`;
             });
             await sendWhatsApp(senderPhone, msg);
-        } else {
-            await sendWhatsApp(senderPhone, `לא נמצאו תוצאות עבור "${searchQuery}".`);
+} else {
+            await sendWhatsApp(senderPhone, `לא נמצאו תוצאות עבור "${searchQuery}".\n\n➕ להוספת הנפטר למאגר לחצו כאן:\nhttps://ner-tamid.netlify.app/`);
         }
     } catch (err) {
         console.error("❌ תקלה:", err);
