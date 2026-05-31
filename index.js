@@ -37,34 +37,38 @@ async function handleSearch(senderPhone, searchQuery) {
     }
 
     try {
-        const { data, error } = await supabase
+        // פירוק מילות החיפוש למערך של מילים נפרדות (לפי רווחים)
+        const searchWords = searchQuery.toLowerCase().split(/\s+/);
+        
+        // מתחילים לבנות את השאילתה מול בסיס הנתונים (ולא מושכים את הכל לזיכרון!)
+        let query = supabase
             .from('deceased_records')
             .select('*')
             .eq('is_approved', true);
 
-        if (error) throw error;
-
-        // פירוק מילות החיפוש למערך של מילים נפרדות (לפי רווחים)
-        const searchWords = searchQuery.toLowerCase().split(/\s+/);
-
-        const matches = (data || []).filter(r => {
-            // יצירת "שק" של כל פרטי הנפטר לתוך טקסט אחד
-            const text = `${r.first_name} ${r.last_name} ${r.cemetery_name} ${r.section} ${r.grave_number} ${r.hebrew_death_date}`.toLowerCase();
-            
-            // בדיקה האם *כל* המילים שהמשתמש הקליד קיימות בתוך הטקסט של הנפטר (לא משנה באיזה סדר)
-            return searchWords.every(word => text.includes(word));
+        // מוסיפים פילטר לכל מילה בחיפוש מול עמודות הטקסט הרלוונטיות בטבלה
+        searchWords.forEach(word => {
+            query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,cemetery_name.ilike.%${word}%,section.ilike.%${word}%`);
         });
 
-        if (matches.length > 0) {
+        // נבקש מהמסד להחזיר רק את 10 התוצאות הראשונות שמתאימות במדויק לחיפוש
+        const { data: matches, error } = await query.limit(10);
+
+        if (error) throw error;
+
+        if (matches && matches.length > 0) {
             let msg = `🕯️ *נמצאו ${matches.length} תוצאות*\n`;
             
-            // חיווי למשתמש אם יש יותר מ-3 תוצאות כדי שידע למקד את החיפוש
-            if (matches.length > 3) {
-                msg += `_(מציג את 3 התוצאות הראשונות. מומלץ להוסיף שם משפחה או את שם בית העלמין כדי למקד את החיפוש)_:\n\n`;
+            // חיווי למשתמש אם יש הרבה תוצאות
+            if (matches.length === 10) {
+                msg += `_(מציג את 3 התוצאות הראשונות מתוך רבות. מומלץ למקד את החיפוש עם שם משפחה או בית עלמין)_:\n\n`;
+            } else if (matches.length > 3) {
+                msg += `_(מציג את 3 התוצאות הראשונות. מומלץ למקד את החיפוש)_:\n\n`;
             } else {
                 msg += `\n`;
             }
 
+            // לוקחים רק את 3 הראשונים לתצוגה בוואטסאפ
             matches.slice(0, 3).forEach(d => {
                 
                 // סידור התאריך הלועזי לפורמט ישראלי (DD/MM/YYYY)
