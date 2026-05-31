@@ -102,7 +102,7 @@ if (unique.length > 0) {
                        `📍 ${d.cemetery_name || '-'}\n` +
                        `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n`;
                 
-                if (d.notes) {
+if (d.notes) {
                     let cleanNotes = d.notes.replace(/לפתיחת עמוד זיכרון/g, '').replace(/-/g, '').trim();
                     if (cleanNotes.length > 0) {
                         msg += `📝 הערות ניווט: ${cleanNotes}\n`;
@@ -111,8 +111,12 @@ if (unique.length > 0) {
                 
                 msg += `───────────────\n`;
             });
+            
+            // התוספת החשובה: שורת אזהרה לחיפושים מוצלחים
+            msg += `⚠️ _הבהרה: ייתכנו אי-דיוקים והסתמכות על נתוני הניווט הינה באחריות המשתמש._\n`;
+            
             await sendWhatsApp(senderPhone, msg);
-} else {
+        } else {
             await sendWhatsApp(senderPhone, 
                 `🕯️ *ברוכים הבאים למערכת 'נר תמיד'*\n\n` +
                 `לא מצאנו במאגר נפטר התואם לחיפוש "${searchQuery}".\n\n` +
