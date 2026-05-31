@@ -67,19 +67,26 @@ async function handleSearch(senderPhone, searchQuery) {
         });
         // ────────────────────────────────────────────────────────────
 
-        if (unique.length > 0) {
-            let msg = `🕯️ *נמצאו ${unique.length} תוצאות*\n`;
+if (unique.length > 0) {
+            let msg = '';
             
-            if (unique.length >= 10) {
-                msg += `_(מציג את 3 התוצאות הראשונות מתוך רבות. מומלץ למקד את החיפוש עם שם משפחה או בית עלמין)_:\n\n`;
-            } else if (unique.length > 3) {
-                msg += `_(מציג את 3 התוצאות הראשונות. מומלץ למקד את החיפוש)_:\n\n`;
+            // סידור העברית לפי כמות התוצאות
+            if (unique.length === 1) {
+                msg = `🕯️ *נמצאה תוצאה אחת:*\n\n`;
             } else {
-                msg += `\n`;
+                msg = `🕯️ *נמצאו ${unique.length} תוצאות:*\n`;
+                if (unique.length >= 10) {
+                    msg += `_(מציג את 3 התוצאות הראשונות מתוך רבות. מומלץ למקד את החיפוש עם שם משפחה או בית עלמין)_:\n\n`;
+                } else if (unique.length > 3) {
+                    msg += `_(מציג את 3 התוצאות הראשונות. מומלץ למקד את החיפוש)_:\n\n`;
+                } else {
+                    msg += `\n`;
+                }
             }
 
             unique.slice(0, 3).forEach(d => {
                 let gregorianStr = '-';
+// ... (המשך הקוד נשאר בדיוק אותו דבר)
                 if (d.gregorian_death_date) {
                     const parts = d.gregorian_death_date.split('-');
                     if (parts.length === 3) {
