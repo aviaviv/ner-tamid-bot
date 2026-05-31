@@ -37,48 +37,55 @@ async function handleSearch(senderPhone, searchQuery) {
     }
 
     try {
-        // פירוק מילות החיפוש למערך של מילים נפרדות (לפי רווחים)
         const searchWords = searchQuery.toLowerCase().split(/\s+/);
         
-        // מתחילים לבנות את השאילתה מול בסיס הנתונים (ולא מושכים את הכל לזיכרון!)
         let query = supabase
             .from('deceased_records')
             .select('*')
             .eq('is_approved', true);
 
-        // מוסיפים פילטר לכל מילה בחיפוש מול עמודות הטקסט הרלוונטיות בטבלה
         searchWords.forEach(word => {
             query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,cemetery_name.ilike.%${word}%,section.ilike.%${word}%`);
         });
 
-        // נבקש מהמסד להחזיר רק את 10 התוצאות הראשונות שמתאימות במדויק לחיפוש
-        const { data: matches, error } = await query.limit(10);
+        const { data: matches, error } = await query.limit(50);
 
         if (error) throw error;
 
-        if (matches && matches.length > 0) {
-            let msg = `🕯️ *נמצאו ${matches.length} תוצאות*\n`;
+        // ── סינון כפילויות ──────────────────────────────────────────
+        const seen = new Set();
+        const unique = (matches || []).filter(d => {
+            const key = [
+                (d.first_name  || '').trim().toLowerCase(),
+                (d.last_name   || '').trim().toLowerCase(),
+                (d.cemetery_name || '').trim().toLowerCase(),
+                (d.grave_number  || '').toString().trim()
+            ].join('|');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+        // ────────────────────────────────────────────────────────────
+
+        if (unique.length > 0) {
+            let msg = `🕯️ *נמצאו ${unique.length} תוצאות*\n`;
             
-            // חיווי למשתמש אם יש הרבה תוצאות
-            if (matches.length === 10) {
+            if (unique.length >= 10) {
                 msg += `_(מציג את 3 התוצאות הראשונות מתוך רבות. מומלץ למקד את החיפוש עם שם משפחה או בית עלמין)_:\n\n`;
-            } else if (matches.length > 3) {
+            } else if (unique.length > 3) {
                 msg += `_(מציג את 3 התוצאות הראשונות. מומלץ למקד את החיפוש)_:\n\n`;
             } else {
                 msg += `\n`;
             }
 
-            // לוקחים רק את 3 הראשונים לתצוגה בוואטסאפ
-            matches.slice(0, 3).forEach(d => {
-                
-                // סידור התאריך הלועזי לפורמט ישראלי (DD/MM/YYYY)
+            unique.slice(0, 3).forEach(d => {
                 let gregorianStr = '-';
                 if (d.gregorian_death_date) {
                     const parts = d.gregorian_death_date.split('-');
                     if (parts.length === 3) {
                         gregorianStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
                     } else {
-                        gregorianStr = d.gregorian_death_date; // במקרה שהפורמט שונה
+                        gregorianStr = d.gregorian_death_date;
                     }
                 }
 
@@ -88,13 +95,8 @@ async function handleSearch(senderPhone, searchQuery) {
                        `📍 ${d.cemetery_name || '-'}\n` +
                        `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n`;
                 
-                // הוספת שורת ההערות במידה והמשתמש הזין כאלו בטופס
-     // הוספת שורת ההערות - תוך ניקוי טקסט לא רצוי ("לפתיחת עמוד זיכרון")
                 if (d.notes) {
-                    // מנקים את המחרוזת מכל מיני וריאציות אפשריות של הטקסט
                     let cleanNotes = d.notes.replace(/לפתיחת עמוד זיכרון/g, '').replace(/-/g, '').trim();
-                    
-                    // אם אחרי הניקוי נשאר טקסט אמיתי, נציג אותו
                     if (cleanNotes.length > 0) {
                         msg += `📝 הערות ניווט: ${cleanNotes}\n`;
                     }
@@ -103,12 +105,12 @@ async function handleSearch(senderPhone, searchQuery) {
                 msg += `───────────────\n`;
             });
             await sendWhatsApp(senderPhone, msg);
-} else {
+        } else {
             await sendWhatsApp(senderPhone, 
                 `🕯️ *ברוכים הבאים למערכת 'נר תמיד'*\n\n` +
                 `לא מצאנו במאגר נפטר התואם לחיפוש "${searchQuery}".\n\n` +
                 `➕ *להוספת הנפטר למאגר לחצו כאן:*\n` +
-                `https://ner-tamid.netlify.app/nn` +
+                `https://ner-tamid.netlify.app/\n\n` +
                 `🔍 *איך מחפשים?*\n` +
                 `פשוט שלחו לי את שמו של הנפטר (שם פרטי, שם משפחה או שניהם), ואחפש במאגר. ניתן גם להוסיף את שם בית העלמין כדי למקד את החיפוש (למשל: "ישראל ישראלי ירקון").\n\n` +
                 `───────────────\n` +
@@ -116,7 +118,6 @@ async function handleSearch(senderPhone, searchQuery) {
                 `ליצירת קשר, הצעות ייעול או פניות עסקיות:\n` +
                 `nertamid.app@gmail.com`
             );
-        }
         }
     } catch (err) {
         console.error("❌ תקלה:", err);
