@@ -11,8 +11,6 @@ app.use(express.json());
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
 
-const WELCOME_TEXT = `🕯️ *ברוכים הבאים למערכת 'נר תמיד'*\n\nשלחו לי את שמו של הנפטר ואחפש במאגר.`;
-
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -46,13 +44,27 @@ async function handleSearch(senderPhone, searchQuery) {
 
         if (error) throw error;
 
+        // פירוק מילות החיפוש למערך של מילים נפרדות (לפי רווחים)
+        const searchWords = searchQuery.toLowerCase().split(/\s+/);
+
         const matches = (data || []).filter(r => {
-            const text = `${r.first_name} ${r.last_name} ${r.section} ${r.grave_number}`.toLowerCase();
-            return text.includes(searchQuery.toLowerCase());
+            // יצירת "שק" של כל פרטי הנפטר לתוך טקסט אחד
+            const text = `${r.first_name} ${r.last_name} ${r.cemetery_name} ${r.section} ${r.grave_number} ${r.hebrew_death_date}`.toLowerCase();
+            
+            // בדיקה האם *כל* המילים שהמשתמש הקליד קיימות בתוך הטקסט של הנפטר (לא משנה באיזה סדר)
+            return searchWords.every(word => text.includes(word));
         });
 
         if (matches.length > 0) {
-            let msg = `🕯️ *נמצאו ${matches.length} תוצאות:*\n\n`;
+            let msg = `🕯️ *נמצאו ${matches.length} תוצאות*\n`;
+            
+            // חיווי למשתמש אם יש יותר מ-3 תוצאות כדי שידע למקד את החיפוש
+            if (matches.length > 3) {
+                msg += `_(מציג את 3 התוצאות הראשונות. מומלץ להוסיף שם משפחה או את שם בית העלמין כדי למקד את החיפוש)_:\n\n`;
+            } else {
+                msg += `\n`;
+            }
+
             matches.slice(0, 3).forEach(d => {
                 
                 // סידור התאריך הלועזי לפורמט ישראלי (DD/MM/YYYY)
@@ -83,11 +95,11 @@ async function handleSearch(senderPhone, searchQuery) {
         } else {
             await sendWhatsApp(senderPhone, 
                 `🕯️ *ברוכים הבאים למערכת 'נר תמיד'*\n\n` +
-                `לא מצאנו במאגר נפטר בשם "${searchQuery}".\n\n` +
+                `לא מצאנו במאגר נפטר התואם לחיפוש "${searchQuery}".\n\n` +
                 `➕ *להוספת הנפטר למאגר לחצו כאן:*\n` +
                 `https://ner-tamid.netlify.app/\n\n` +
                 `🔍 *איך מחפשים?*\n` +
-                `פשוט שלחו לי את שמו של הנפטר (שם פרטי, שם משפחה או שניהם), ואחפש במאגר.`
+                `פשוט שלחו לי את שמו של הנפטר (שם פרטי, שם משפחה או שניהם), ואחפש במאגר. ניתן גם להוסיף את שם בית העלמין כדי למקד את החיפוש (למשל: "ישראל ישראלי ירקון").`
             );
         }
     } catch (err) {
