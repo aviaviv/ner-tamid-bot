@@ -51,11 +51,24 @@ async function handleSearch(senderPhone, searchQuery) {
             return text.includes(searchQuery.toLowerCase());
         });
 
-if (matches.length > 0) {
+        if (matches.length > 0) {
             let msg = `🕯️ *נמצאו ${matches.length} תוצאות:*\n\n`;
             matches.slice(0, 3).forEach(d => {
+                
+                // סידור התאריך הלועזי לפורמט ישראלי (DD/MM/YYYY)
+                let gregorianStr = '-';
+                if (d.gregorian_death_date) {
+                    const parts = d.gregorian_death_date.split('-');
+                    if (parts.length === 3) {
+                        gregorianStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    } else {
+                        gregorianStr = d.gregorian_death_date; // במקרה שהפורמט שונה
+                    }
+                }
+
                 msg += `👤 *${d.first_name} ${d.last_name}*\n` +
-                       `📅 ${d.hebrew_death_date || '-'}\n` +
+                       `📅 עברי: ${d.hebrew_death_date || '-'}\n` +
+                       `🗓️ לועזי: ${gregorianStr}\n` +
                        `📍 ${d.cemetery_name || '-'}\n` +
                        `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n`;
                 
@@ -67,7 +80,7 @@ if (matches.length > 0) {
                 msg += `───────────────\n`;
             });
             await sendWhatsApp(senderPhone, msg);
-} else {
+        } else {
             await sendWhatsApp(senderPhone, 
                 `🕯️ *ברוכים הבאים למערכת 'נר תמיד'*\n\n` +
                 `לא מצאנו במאגר נפטר בשם "${searchQuery}".\n\n` +
