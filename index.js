@@ -89,8 +89,15 @@ async function handleSearch(senderPhone, searchQuery) {
                        `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n`;
                 
                 // הוספת שורת ההערות במידה והמשתמש הזין כאלו בטופס
+     // הוספת שורת ההערות - תוך ניקוי טקסט לא רצוי ("לפתיחת עמוד זיכרון")
                 if (d.notes) {
-                    msg += `📝 הערות ניווט: ${d.notes}\n`;
+                    // מנקים את המחרוזת מכל מיני וריאציות אפשריות של הטקסט
+                    let cleanNotes = d.notes.replace(/לפתיחת עמוד זיכרון/g, '').replace(/-/g, '').trim();
+                    
+                    // אם אחרי הניקוי נשאר טקסט אמיתי, נציג אותו
+                    if (cleanNotes.length > 0) {
+                        msg += `📝 הערות ניווט: ${cleanNotes}\n`;
+                    }
                 }
                 
                 msg += `───────────────\n`;
