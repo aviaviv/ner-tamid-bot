@@ -73,10 +73,9 @@ async function handleSearch(senderPhone, searchQuery) {
             .select('*')
             .eq('is_approved', true);
 
-        searchWords.forEach(word => {
-            query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,cemetery_name.ilike.%${word}%,section.ilike.%${word}%`);
+searchWords.forEach(word => {
+            query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,cemetery_name.ilike.%${word}%,section.ilike.%${word}%,hebrew_death_date.ilike.%${word}%`);
         });
-
         const { data: matches, error } = await query.limit(50);
 
         if (error) throw error;
@@ -130,17 +129,45 @@ async function handleSearch(senderPhone, searchQuery) {
                     rows
                 );
 
-        } else if (resultsCount > 10) {
-            // מצב 3: מעל 10 תוצאות - מבקשים מהמשתמש למקד עם בית עלמין
+} else if (resultsCount > 10) {
+            // מחלצים רק את השמות הייחודיים של בתי העלמין
             const uniqueCemeteries = [...new Set(unique.map(r => r.cemetery_name).filter(Boolean))];
-            let cemeteriesText = uniqueCemeteries.join(', ');
-            
-            await sendWhatsApp(senderPhone, 
-                `🕯️ *נמצאו ${resultsCount} תוצאות.*\n\n` +
-                `התוצאות פזורות במספר בתי עלמין, ביניהם: ${cemeteriesText}.\n\n` +
-                `כדי שאוכל להציג לכם את המיקום המדויק, אנא כתבו את השם שוב בתוספת *שם בית העלמין*.\n` +
-                `_(לדוגמה: "${searchQuery} ירקון")_`
-            );
+
+            if (uniqueCemeteries.length > 1) {
+                // מצב 3א: מעל 10 תוצאות בבתי עלמין שונים - מבקשים מיקוד בית עלמין
+                let cemeteriesText = uniqueCemeteries.join(', ');
+                await sendWhatsApp(senderPhone, 
+                    `🕯️ *נמצאו ${resultsCount} תוצאות.*\n\n` +
+                    `התוצאות פזורות במספר בתי עלמין, ביניהם: ${cemeteriesText}.\n\n` +
+                    `כדי שאוכל להציג לכם את המיקום המדויק, אנא כתבו את השם שוב בתוספת *שם בית העלמין*.\n` +
+                    `_(לדוגמה: "${searchQuery} ירקון")_`
+                );
+            } else {
+                // מצב 3ב: "משבר משה כהן" - מעל 10 תוצאות באותו בית עלמין!
+                // מציגים את 10 הראשונים בתפריט, ומבקשים למקד עם תאריך עברי
+                const top10 = unique.slice(0, 10);
+                const rows = top10.map(d => {
+                    const title = `${d.first_name || ''} ${d.last_name || ''}`.trim().substring(0, 24);
+                    let year = 'לא ידוע';
+                    if (d.gregorian_death_date) year = d.gregorian_death_date.split('-')[0];
+                    const desc = `${d.hebrew_death_date || '-'} | לועזי: ${year}`.substring(0, 72);
+                    
+                    return {
+                        id: `grave_${d.id}`,
+                        title: title,
+                        description: desc
+                    };
+                });
+
+                await sendWhatsAppInteractive(senderPhone, 
+                    `🕯️ *נמצאו ${resultsCount} תוצאות עבור השם ב${uniqueCemeteries[0] || 'בית העלמין'}.*\n\n` +
+                    `מכיוון שוואטסאפ מגבילה ל-10 תוצאות בתפריט, הנה 10 הראשונות:\n\n` +
+                    `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם + שנת הפטירה העברית. למשל: "${searchQuery} תשע"א")*`, 
+                    rows
+                );
+            }
+
+       
 
         } else {
             // 0 תוצאות (הקוד הקיים שלך)
