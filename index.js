@@ -74,7 +74,7 @@ async function handleSearch(senderPhone, searchQuery) {
             .eq('is_approved', true);
 
 searchWords.forEach(word => {
-            query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,cemetery_name.ilike.%${word}%,section.ilike.%${word}%,hebrew_death_date.ilike.%${word}%`);
+            query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,cemetery_name.ilike.%${word}%,hebrew_death_date.ilike.%${word}%`);
         });
         const { data: matches, error } = await query.limit(50);
 
@@ -143,6 +143,37 @@ searchWords.forEach(word => {
                     `_(לדוגמה: "${searchQuery} ירקון")_`
                 );
             } else {
+                // מצב 3ב: "משבר משה כהן" - מעל 10 תוצאות באותו בית עלמין!
+                // מציגים את 10 הראשונים בתפריט, ומבקשים למקד עם תאריך עברי
+                const top10 = unique.slice(0, 10);
+                const rows = top10.map(d => {
+                    // הגנה 1: הבטחה שתמיד תהיה כותרת כדי שוואטסאפ לא יחסום
+                    let title = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'שם לא ידוע';
+                    title = title.substring(0, 24); 
+                    
+                    let year = 'לא ידוע';
+                    // הגנה 2: הבטחה שהתאריך מתנהג כטקסט (String) כדי שלא יקרוס
+                    if (d.gregorian_death_date) {
+                        year = String(d.gregorian_death_date).split('-')[0];
+                    }
+                    const desc = `${d.hebrew_death_date || '-'} | לועזי: ${year}`.substring(0, 72);
+                    
+                    return {
+                        id: `grave_${d.id}`,
+                        title: title,
+                        description: desc
+                    };
+                });
+
+                await sendWhatsAppInteractive(senderPhone, 
+                    `🕯️ *נמצאו ${resultsCount} תוצאות עבור השם ב${uniqueCemeteries[0] || 'בית העלמין'}.*\n\n` +
+                    `מכיוון שוואטסאפ מגבילה ל-10 תוצאות בתפריט, הנה 10 הראשונות:\n\n` +
+                    `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם בתוספת שנת הפטירה בלבד. למשל: "${searchQuery} תשע"א" או "${searchQuery} 2011")*`, 
+                    rows
+                );
+            }
+
+        } else {
                 // מצב 3ב: "משבר משה כהן" - מעל 10 תוצאות באותו בית עלמין!
                 // מציגים את 10 הראשונים בתפריט, ומבקשים למקד עם תאריך עברי
                 const top10 = unique.slice(0, 10);
