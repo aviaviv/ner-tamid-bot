@@ -159,10 +159,10 @@ searchWords.forEach(word => {
                     };
                 });
 
-                await sendWhatsAppInteractive(senderPhone, 
+await sendWhatsAppInteractive(senderPhone, 
                     `🕯️ *נמצאו ${resultsCount} תוצאות עבור השם ב${uniqueCemeteries[0] || 'בית העלמין'}.*\n\n` +
                     `מכיוון שוואטסאפ מגבילה ל-10 תוצאות בתפריט, הנה 10 הראשונות:\n\n` +
-                    `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם + שנת הפטירה העברית. למשל: "${searchQuery} תשע"א")*`, 
+                    `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם בתוספת שנת הפטירה. למשל: "${searchQuery} תשע"א")*`, 
                     rows
                 );
             }
