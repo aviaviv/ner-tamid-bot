@@ -123,7 +123,12 @@ async function handleSearch(senderPhone, searchQuery) {
                 };
             });
 
-            await sendWhatsAppInteractive(senderPhone, "🕯️ מצאתי מספר תוצאות התואמות לחיפוש.\nאנא לחצו על הכפתור למטה ובחרו את הרשומה המדויקת:", rows);
+         await sendWhatsAppInteractive(senderPhone, 
+                    `🕯️ *נמצאו ${resultsCount} תוצאות עבור השם ב${uniqueCemeteries[0] || 'בית העלמין'}.*\n\n` +
+                    `מכיוון שוואטסאפ מגבילה ל-10 תוצאות בתפריט, הנה 10 הראשונות:\n\n` +
+                    `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם בתוספת שנת הפטירה בלבד. למשל: "${searchQuery} תשע"א" או "${searchQuery} 2011")*`, 
+                    rows
+                );
 
         } else if (resultsCount > 10) {
             // מצב 3: מעל 10 תוצאות - מבקשים מהמשתמש למקד עם בית עלמין
