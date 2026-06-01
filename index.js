@@ -25,10 +25,39 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
     const msg = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    if (msg?.type === 'text') {
+    
+    if (!msg) return;
+
+    // זיהוי סוג ההודעה: טקסט חופשי או לחיצה על רשימה
+    if (msg.type === 'text') {
         await handleSearch(msg.from, msg.text.body.trim());
+    } else if (msg.type === 'interactive' && msg.interactive.type === 'list_reply') {
+        // המשתמש לחץ על כפתור מהרשימה! נחלץ את ה-ID
+        const graveId = msg.interactive.list_reply.id.replace('grave_', '');
+        await handleExactMatch(msg.from, graveId);
     }
 });
+
+// פונקציה חדשה: מופעלת רק כאשר המשתמש לוחץ על שם ספציפי מתוך רשימה
+async function handleExactMatch(senderPhone, graveId) {
+    try {
+        const { data: records, error } = await supabase
+            .from('deceased_records')
+            .select('*')
+            .eq('id', graveId)
+            .limit(1);
+
+        if (error) throw error;
+        
+        if (records && records.length > 0) {
+            const msg = formatSingleResult(records[0]);
+            await sendWhatsApp(senderPhone, msg);
+        }
+    } catch (err) {
+        console.error("❌ תקלה בשליפת רשומה ספציפית:", err);
+        await sendWhatsApp(senderPhone, "⚠️ אירעה תקלה בשליפת הנתונים. אנא נסו שוב.");
+    }
+}
 
 async function handleSearch(senderPhone, searchQuery) {
     if (!searchQuery || searchQuery.trim().length < 2) {
@@ -52,7 +81,7 @@ async function handleSearch(senderPhone, searchQuery) {
 
         if (error) throw error;
 
-        // ── סינון כפילויות ──────────────────────────────────────────
+        // ── סינון כפילויות קלאסי שכתבת ─────────────────────────────
         const seen = new Set();
         const unique = (matches || []).filter(d => {
             const key = [
@@ -67,87 +96,131 @@ async function handleSearch(senderPhone, searchQuery) {
         });
         // ────────────────────────────────────────────────────────────
 
-if (unique.length > 0) {
-            let msg = '';
-            
-// סידור העברית לפי כמות התוצאות
-            if (unique.length === 1) {
-                msg = `🕯️ *נמצאה תוצאה אחת:*\n\n`;
-            } else {
-                msg = `🕯️ *נמצאו ${unique.length} תוצאות:*\n`;
-                if (unique.length >= 10) {
-                    msg += `_(מציג את 3 התוצאות הראשונות מתוך רבות. מומלץ למקד את החיפוש עם שם משפחה או בית עלמין)_:\n\n`;
-                } else if (unique.length > 3) {
-                    // התיקון: הוספת ההסבר איך למקד את החיפוש גם כאן!
-                    msg += `_(מציג את 3 התוצאות הראשונות. מומלץ למקד את החיפוש עם שם משפחה או בית עלמין)_:\n\n`;
-                } else {
-                    msg += `\n`;
-                }
-            }
+        const resultsCount = unique.length;
 
-            unique.slice(0, 3).forEach(d => {
-                let gregorianStr = '-';
-// ... (המשך הקוד נשאר בדיוק אותו דבר)
-                if (d.gregorian_death_date) {
-                    const parts = d.gregorian_death_date.split('-');
-                    if (parts.length === 3) {
-                        gregorianStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                    } else {
-                        gregorianStr = d.gregorian_death_date;
-                    }
-                }
-
-                msg += `👤 *${d.first_name} ${d.last_name}*\n` +
-                       `📅 עברי: ${d.hebrew_death_date || '-'}\n` +
-                       `🗓️ לועזי: ${gregorianStr}\n` +
-                       `📍 ${d.cemetery_name || '-'}\n` +
-                       `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n`;
-                
-if (d.notes) {
-                    let cleanNotes = d.notes.replace(/לפתיחת עמוד זיכרון/g, '').replace(/-/g, '').trim();
-                    if (cleanNotes.length > 0) {
-                        msg += `📝 הערות ניווט: ${cleanNotes}\n`;
-                    }
-                }
-                
-                msg += `───────────────\n`;
-            });
-            
-            // התוספת החשובה: שורת אזהרה לחיפושים מוצלחים
-            msg += `⚠️ _הבהרה: ייתכנו אי-דיוקים והסתמכות על נתוני הניווט הינה באחריות המשתמש._\n`;
-            
+        if (resultsCount === 1) {
+            // מצב 1: תוצאה אחת בלבד - יורים אותה ישר למשתמש
+            const msg = formatSingleResult(unique[0]);
             await sendWhatsApp(senderPhone, msg);
+
+        } else if (resultsCount > 1 && resultsCount <= 10) {
+            // מצב 2: עד 10 תוצאות - מציגים תפריט אינטראקטיבי
+            const rows = unique.map(d => {
+                // חייבים לחתוך עד 24 תווים כדי שוואטסאפ לא יזרוק שגיאה
+                const title = `${d.first_name || ''} ${d.last_name || ''}`.trim().substring(0, 24);
+                
+                // חילוץ שנה להצגה מהירה בתיאור
+                let year = 'לא ידוע';
+                if (d.gregorian_death_date) {
+                    year = d.gregorian_death_date.split('-')[0];
+                }
+                const desc = `${d.cemetery_name || '-'} | שנת פטירה: ${year}`.substring(0, 72);
+                
+                return {
+                    id: `grave_${d.id}`,
+                    title: title,
+                    description: desc
+                };
+            });
+
+            await sendWhatsAppInteractive(senderPhone, "🕯️ מצאתי מספר תוצאות התואמות לחיפוש.\nאנא לחצו על הכפתור למטה ובחרו את הרשומה המדויקת:", rows);
+
+        } else if (resultsCount > 10) {
+            // מצב 3: מעל 10 תוצאות - מבקשים מהמשתמש למקד עם בית עלמין
+            const uniqueCemeteries = [...new Set(unique.map(r => r.cemetery_name).filter(Boolean))];
+            let cemeteriesText = uniqueCemeteries.join(', ');
+            
+            await sendWhatsApp(senderPhone, 
+                `🕯️ *נמצאו ${resultsCount} תוצאות.*\n\n` +
+                `התוצאות פזורות במספר בתי עלמין, ביניהם: ${cemeteriesText}.\n\n` +
+                `כדי שאוכל להציג לכם את המיקום המדויק, אנא כתבו את השם שוב בתוספת *שם בית העלמין*.\n` +
+                `_(לדוגמה: "${searchQuery} ירקון")_`
+            );
+
         } else {
+            // 0 תוצאות (הקוד הקיים שלך)
             await sendWhatsApp(senderPhone, 
                 `🕯️ *ברוכים הבאים למערכת 'נר תמיד'*\n\n` +
                 `לא מצאנו במאגר נפטר התואם לחיפוש "${searchQuery}".\n\n` +
                 `➕ *להוספת הנפטר למאגר לחצו כאן:*\n` +
-                `https://ner-tamid.netlify.app/nn` +
+                `https://ner-tamid.netlify.app/nn\n\n` +
                 `🔍 *איך מחפשים?*\n` +
-                `פשוט שלחו לי את שמו של הנפטר (שם פרטי, שם משפחה או שניהם), ואחפש במאגר. ניתן גם להוסיף את שם בית העלמין כדי למקד את החיפוש (למשל: "ישראל ישראלי ירקון").\n\n` +
+                `פשוט שלחו לי את שמו של הנפטר, ואחפש במאגר. ניתן גם להוסיף את שם בית העלמין כדי למקד.\n\n` +
                 `───────────────\n` +
                 `⚠️ _הבהרה: המערכת הינה מיזם התנדבותי פרטי. הנתונים נאספו ממקורות גלויים וייתכנו אי-דיוקים. ההסתמכות על המידע באחריות המשתמש._\n\n` +
                 `💡 *המיזם הוקם מתוך שליחות ע"י אבי אביב.*\n` +
-                `ליצירת קשר, הצעות ייעול או פניות עסקיות:\n` +
-                `nertamid.app@gmail.com`
+                `ליצירת קשר: nertamid.app@gmail.com`
             );
         }
-} catch (err) {
+
+    } catch (err) {
         console.error("❌ תקלה:", err);
-        // שליחת הודעה למשתמש במקום לשתוק!
         await sendWhatsApp(senderPhone, 
             `⚠️ *מצטערים, החיפוש רחב מדי או שאירעה תקלה.*\n\n` +
-            `נראה שהשם שחיפשת ("${searchQuery}") נפוץ מאוד, והמערכת מצאה יותר מדי תוצאות לעבד.\n` +
-            `אנא נסו למקד את החיפוש (למשל: "ישראל לוי ירקון" או "ישראל לוי חלקה 2").`
+            `נראה שהשם שחיפשת ("${searchQuery}") נפוץ מאוד. אנא נסו למקד את החיפוש.`
         );
     }
 }
 
+// פונקציית עזר לעיצוב רשומה בודדת (מונעת כפילות קוד)
+function formatSingleResult(d) {
+    let gregorianStr = '-';
+    if (d.gregorian_death_date) {
+        const parts = d.gregorian_death_date.split('-');
+        if (parts.length === 3) {
+            gregorianStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        } else {
+            gregorianStr = d.gregorian_death_date;
+        }
+    }
+
+    let msg = `🕯️ *נמצאה תוצאה מדויקת:*\n\n`;
+    msg += `👤 *${d.first_name || ''} ${d.last_name || ''}*\n` +
+           `📅 עברי: ${d.hebrew_death_date || '-'}\n` +
+           `🗓️ לועזי: ${gregorianStr}\n` +
+           `📍 ${d.cemetery_name || '-'}\n` +
+           `🏛️ חלקה: ${d.section || '-'}, שורה: ${d.row || '-'}, קבר: ${d.grave_number || '-'}\n`;
+    
+    if (d.notes) {
+        let cleanNotes = d.notes.replace(/לפתיחת עמוד זיכרון/g, '').replace(/-/g, '').trim();
+        if (cleanNotes.length > 0) {
+            msg += `📝 הערות ניווט: ${cleanNotes}\n`;
+        }
+    }
+    
+    msg += `───────────────\n⚠️ _הבהרה: ייתכנו אי-דיוקים והסתמכות על נתוני הניווט הינה באחריות המשתמש._\n`;
+    return msg;
+}
+
+// פונקציות תקשורת עם וואטסאפ (טקסט רגיל)
 async function sendWhatsApp(to, text) {
     await fetch(`https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_ID}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WHATSAPP_TOKEN}` },
         body: JSON.stringify({ messaging_product: 'whatsapp', to: to.replace('+', ''), type: 'text', text: { body: text } }),
+    });
+}
+
+// פונקציה חדשה: תקשורת עם וואטסאפ (תפריט בחירה אינטראקטיבי)
+async function sendWhatsAppInteractive(to, bodyText, rows) {
+    const payload = {
+        messaging_product: 'whatsapp',
+        to: to.replace('+', ''),
+        type: 'interactive',
+        interactive: {
+            type: 'list',
+            body: { text: bodyText },
+            action: {
+                button: 'בחר/י נפטר',
+                sections: [{ title: 'תוצאות תואמות', rows: rows }]
+            }
+        }
+    };
+
+    await fetch(`https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_ID}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+        body: JSON.stringify(payload),
     });
 }
 
