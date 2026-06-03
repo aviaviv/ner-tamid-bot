@@ -95,7 +95,10 @@ searchWords.forEach(word => {
         });
         // ────────────────────────────────────────────────────────────
 
-        const resultsCount = unique.length;
+const resultsCount = unique.length;
+        
+        // הגדרת בתי העלמין כאן כדי שכל המצבים יוכלו להשתמש בזה
+        const uniqueCemeteries = [...new Set(unique.map(r => r.cemetery_name).filter(Boolean))];
 
         if (resultsCount === 1) {
             // מצב 1: תוצאה אחת בלבד - יורים אותה ישר למשתמש
@@ -105,13 +108,10 @@ searchWords.forEach(word => {
         } else if (resultsCount > 1 && resultsCount <= 10) {
             // מצב 2: עד 10 תוצאות - מציגים תפריט אינטראקטיבי
             const rows = unique.map(d => {
-                // חייבים לחתוך עד 24 תווים כדי שוואטסאפ לא יזרוק שגיאה
                 const title = `${d.first_name || ''} ${d.last_name || ''}`.trim().substring(0, 24);
-                
-                // חילוץ שנה להצגה מהירה בתיאור
                 let year = 'לא ידוע';
                 if (d.gregorian_death_date) {
-                    year = d.gregorian_death_date.split('-')[0];
+                    year = String(d.gregorian_death_date).split('-')[0];
                 }
                 const desc = `${d.cemetery_name || '-'} | שנת פטירה: ${year}`.substring(0, 72);
                 
@@ -122,17 +122,14 @@ searchWords.forEach(word => {
                 };
             });
 
-         await sendWhatsAppInteractive(senderPhone, 
-                    `🕯️ *נמצאו ${resultsCount} תוצאות עבור השם ב${uniqueCemeteries[0] || 'בית העלמין'}.*\n\n` +
-                    `מכיוון שוואטסאפ מגבילה ל-10 תוצאות בתפריט, הנה 10 הראשונות:\n\n` +
-                    `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם בתוספת שנת הפטירה בלבד. למשל: "${searchQuery} תשע"א" או "${searchQuery} 2011")*`, 
-                    rows
-                );
+            await sendWhatsAppInteractive(senderPhone, 
+                `🕯️ *נמצאו ${resultsCount} תוצאות עבור השם ב${uniqueCemeteries[0] || 'בית העלמין'}.*\n\n` +
+                `מכיוון שוואטסאפ מגבילה ל-10 תוצאות בתפריט, הנה 10 הראשונות:\n\n` +
+                `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם בתוספת שנת הפטירה בלבד. למשל: "${searchQuery} תשע"א" או "${searchQuery} 2011")*`, 
+                rows
+            );
 
-} else if (resultsCount > 10) {
-            // מחלצים רק את השמות הייחודיים של בתי העלמין
-            const uniqueCemeteries = [...new Set(unique.map(r => r.cemetery_name).filter(Boolean))];
-
+        } else if (resultsCount > 10) {
             if (uniqueCemeteries.length > 1) {
                 // מצב 3א: מעל 10 תוצאות בבתי עלמין שונים - מבקשים מיקוד בית עלמין
                 let cemeteriesText = uniqueCemeteries.join(', ');
@@ -144,15 +141,12 @@ searchWords.forEach(word => {
                 );
             } else {
                 // מצב 3ב: "משבר משה כהן" - מעל 10 תוצאות באותו בית עלמין!
-                // מציגים את 10 הראשונים בתפריט, ומבקשים למקד עם תאריך עברי
                 const top10 = unique.slice(0, 10);
                 const rows = top10.map(d => {
-                    // הגנה 1: הבטחה שתמיד תהיה כותרת כדי שוואטסאפ לא יחסום
                     let title = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'שם לא ידוע';
                     title = title.substring(0, 24); 
                     
                     let year = 'לא ידוע';
-                    // הגנה 2: הבטחה שהתאריך מתנהג כטקסט (String) כדי שלא יקרוס
                     if (d.gregorian_death_date) {
                         year = String(d.gregorian_death_date).split('-')[0];
                     }
@@ -174,34 +168,7 @@ searchWords.forEach(word => {
             }
 
         } else {
-                // מצב 3ב: "משבר משה כהן" - מעל 10 תוצאות באותו בית עלמין!
-                // מציגים את 10 הראשונים בתפריט, ומבקשים למקד עם תאריך עברי
-                const top10 = unique.slice(0, 10);
-                const rows = top10.map(d => {
-                    const title = `${d.first_name || ''} ${d.last_name || ''}`.trim().substring(0, 24);
-                    let year = 'לא ידוע';
-                    if (d.gregorian_death_date) year = d.gregorian_death_date.split('-')[0];
-                    const desc = `${d.hebrew_death_date || '-'} | לועזי: ${year}`.substring(0, 72);
-                    
-                    return {
-                        id: `grave_${d.id}`,
-                        title: title,
-                        description: desc
-                    };
-                });
-
-await sendWhatsAppInteractive(senderPhone, 
-                    `🕯️ *נמצאו ${resultsCount} תוצאות עבור השם ב${uniqueCemeteries[0] || 'בית העלמין'}.*\n\n` +
-                    `מכיוון שוואטסאפ מגבילה ל-10 תוצאות בתפריט, הנה 10 הראשונות:\n\n` +
-                    `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם בתוספת שנת הפטירה. למשל: "${searchQuery} תשע"א")*`, 
-                    rows
-                );
-            }
-
-       
-
-        } else {
-            // 0 תוצאות (הקוד הקיים שלך)
+            // 0 תוצאות
             await sendWhatsApp(senderPhone, 
                 `🕯️ *ברוכים הבאים למערכת 'נר תמיד'*\n\n` +
                 `לא מצאנו במאגר נפטר התואם לחיפוש "${searchQuery}".\n\n` +
