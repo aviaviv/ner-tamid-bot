@@ -77,7 +77,7 @@ async function handleSearch(senderPhone, searchQuery) {
             query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,cemetery_name.ilike.%${word}%,hebrew_death_date.ilike.%${word}%`);
         });
         
-        const { data: matches, error } = await query.limit(50);
+        const { data: matches, error } = await query.limit(400);
 
         if (error) throw error;
 
