@@ -73,9 +73,10 @@ async function handleSearch(senderPhone, searchQuery) {
             .select('*')
             .eq('is_approved', true);
 
-searchWords.forEach(word => {
+        searchWords.forEach(word => {
             query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,cemetery_name.ilike.%${word}%,hebrew_death_date.ilike.%${word}%`);
         });
+        
         const { data: matches, error } = await query.limit(50);
 
         if (error) throw error;
@@ -95,7 +96,7 @@ searchWords.forEach(word => {
         });
         // ────────────────────────────────────────────────────────────
 
-const resultsCount = unique.length;
+        const resultsCount = unique.length;
         
         // הגדרת בתי העלמין כאן כדי שכל המצבים יוכלו להשתמש בזה
         const uniqueCemeteries = [...new Set(unique.map(r => r.cemetery_name).filter(Boolean))];
@@ -130,42 +131,35 @@ const resultsCount = unique.length;
             );
 
         } else if (resultsCount > 10) {
-            if (uniqueCemeteries.length > 1) {
-                // מצב 3א: מעל 10 תוצאות בבתי עלמין שונים - מבקשים מיקוד בית עלמין
-                let cemeteriesText = uniqueCemeteries.join(', ');
-                await sendWhatsApp(senderPhone, 
-                    `🕯️ *נמצאו ${resultsCount} תוצאות.*\n\n` +
-                    `התוצאות פזורות במספר בתי עלמין, ביניהם: ${cemeteriesText}.\n\n` +
-                    `כדי שאוכל להציג לכם את המיקום המדויק, אנא כתבו את השם שוב בתוספת *שם בית העלמין*.\n` +
-                    `_(לדוגמה: "${searchQuery} ירקון")_`
-                );
-            } else {
-                // מצב 3ב: "משבר משה כהן" - מעל 10 תוצאות באותו בית עלמין!
-                const top10 = unique.slice(0, 10);
-                const rows = top10.map(d => {
-                    let title = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'שם לא ידוע';
-                    title = title.substring(0, 24); 
-                    
-                    let year = 'לא ידוע';
-                    if (d.gregorian_death_date) {
-                        year = String(d.gregorian_death_date).split('-')[0];
-                    }
-                    const desc = `${d.hebrew_death_date || '-'} | לועזי: ${year}`.substring(0, 72);
-                    
-                    return {
-                        id: `grave_${d.id}`,
-                        title: title,
-                        description: desc
-                    };
-                });
+            // מצב 3 המאוחד: מעל 10 תוצאות - תמיד מציגים 10 ראשונות ומבקשים למקד עם שנה
+            const top10 = unique.slice(0, 10);
+            const rows = top10.map(d => {
+                let title = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'שם לא ידוע';
+                title = title.substring(0, 24); 
+                
+                let year = 'לא ידוע';
+                if (d.gregorian_death_date) {
+                    year = String(d.gregorian_death_date).split('-')[0];
+                }
+                // מציגים בתיאור גם את בית העלמין וגם את שנת הפטירה
+                const desc = `${d.cemetery_name || '-'} | פטירה: ${year}`.substring(0, 72);
+                
+                return {
+                    id: `grave_${d.id}`,
+                    title: title,
+                    description: desc
+                };
+            });
 
-                await sendWhatsAppInteractive(senderPhone, 
-                    `🕯️ *נמצאו ${resultsCount} תוצאות עבור השם ב${uniqueCemeteries[0] || 'בית העלמין'}.*\n\n` +
-                    `מכיוון שוואטסאפ מגבילה ל-10 תוצאות בתפריט, הנה 10 הראשונות:\n\n` +
-                    `*(אם הנפטר לא מופיע כאן, שלחו שוב את השם בתוספת שנת הפטירה בלבד. למשל: "${searchQuery} תשע"א" או "${searchQuery} 2011")*`, 
-                    rows
-                );
-            }
+            // לוקחים רק את 2 המילים הראשונות מהחיפוש בשביל הדוגמה (כדי למנוע "מזל כהן ירקון תשע"א")
+            const baseName = searchWords.slice(0, 2).join(' ');
+
+            await sendWhatsAppInteractive(senderPhone, 
+                `🕯️ *נמצאו ${resultsCount} תוצאות במאגר.*\n\n` +
+                `מכיוון שוואטסאפ מגבילה את התפריט ל-10 שורות, הנה 10 התוצאות הראשונות:\n\n` +
+                `*(אם יקירכם לא מופיע ברשימה, שלחו שוב את השם בתוספת שנת פטירה. למשל: "${baseName} תשע"א" או "${baseName} 2011")*`, 
+                rows
+            );
 
         } else {
             // 0 תוצאות
@@ -183,7 +177,7 @@ const resultsCount = unique.length;
             );
         }
 
-} catch (err) {
+    } catch (err) {
         console.error("❌ תקלה:", err);
         await sendWhatsApp(senderPhone, 
             `⚠️ *מצטערים, החיפוש רחב מדי או שאירעה תקלה.*\n\n` +
