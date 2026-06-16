@@ -23,6 +23,11 @@ app.get('/webhook', (req, res) => {
 });
 
 app.post('/webhook', async (req, res) => {
+    const sender = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
+    if (sender) {
+        console.log(`📩 הודעה חדשה התקבלה מטלפון: ${sender}`);
+    }
+
     res.sendStatus(200);
     const msg = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     
