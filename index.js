@@ -257,5 +257,16 @@ async function sendWhatsAppInteractive(to, bodyText, rows) {
         body: JSON.stringify(payload),
     });
 }
+// נתיב אוטומטי להשארת השרת ומסד הנתונים ערים
+app.get('/keep-alive', async (req, res) => {
+    try {
+        await supabase.from('deceased_records').select('id').limit(1);
+        console.log("⏰ שרת ומסד נתונים התעוררו בהצלחה (Keep-Alive)");
+        res.status(200).send("Awake and kicking!");
+    } catch (err) {
+        console.error("❌ שגיאה בהשכמת השרת:", err);
+        res.status(500).send("Error waking up");
+    }
+});
 
 app.listen(3000, () => console.log("🚀 בוט 'נר תמיד' פעיל!"));
